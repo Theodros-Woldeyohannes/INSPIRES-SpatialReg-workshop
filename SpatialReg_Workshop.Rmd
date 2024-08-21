@@ -1,0 +1,789 @@
+---
+title: "Introduction to Spatial Regression Methods in Environmental Health"
+subtitle: |
+  | **Theodros Woldeyohannes^1,3^**
+  | **Daniel Beene^1,2^**
+  
+author: |
+  | *Advised by*<br>
+  | **Tamar Ginossar, PhD^3,4^**
+  | **Yan Lin, PhD^1^**
+  | **Joseph Hoover, PhD^5^**<br><br><br>
+  *^1^ Department of Geography & Environmental Studies, University of New Mexico<br>
+  ^2^ Community Environmental Health Program, College of Pharmacy, University of New Mexico Health Sciences Center<br>
+  ^3^ New Mexico Integrative Science Program Incorporating Research in Environmental Sciences (NM-INSPIRES) Center, University of New Mexico<br>
+  ^4^ Department of Communication and Journalism, University of New Mexico<br>
+  ^5^ Department of Environmental Science, University of Arizona*
+date: "`r format(Sys.time(), '%B %d, %Y')`"
+output:
+  html_document:
+    toc: true
+    number_sections: true
+    toc_depth: 5
+    code_folding: show
+    toc_float: true
+    collapsed: false
+    smooth_scroll: TRUE
+    theme: spacelab
+    highlight: tango
+  pdf_document:
+    df_print: kable
+fontsize: 12pt
+geometry: margin=0.25in
+always_allow_html: yes
+---
+
+<style>
+/* HTML FORMATTING */
+
+h1, .h1, h2, .h2, h3, .h3, h4, .h4, h5, .h5 {
+  margin-top: 25px; /* space before each header */
+  font-weight: bold; /* bold headers */
+}
+</style>
+----------------------------------------
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(comment = NA, message = FALSE, warning = FALSE, width = 100)
+knitr::opts_chunk$set(fig.align = "center", fig.height = 4, fig.width = 6)
+knitr::opts_chunk$set(cache = FALSE)
+```
+
+# Background
+
+Geographic Information Systems (GIS) provide versatile tools for uncovering spatial patterns of public health and environmental justice (EJ) issues at multiple scales within the exposome. There are many open-source GIS platforms that allow for cost-effective and equitable integration of GIS tools into data analysis workflows. With open-source GIS, public health researchers can effectively collaborate and easily share reproducible methodologies and findings, helping to foster more inclusive and innovative approaches to cross-cutting health challenges. 
+
+In this workshop, you will be introduced to open-source GIS using R, as well as techniques for leveraging GIS tools and spatial data to advance public health research related to the plural environmental health effects of climate change in EJ communities. By participating in this workshop, you will learn the basics of GIS data-structures, loading and visualizing spatial data, and spatial relationships in regression analyses.
+
+## Modeling
+
+Modeling, at its most simple, is to use of mathematics and statistical assumptions on sample data to make predictions about the real world. Geospatial modeling adds the assumption that spatial patterns in the data and locations of observations can uncover relationships that may otherwise go missed. Geospatial modeling has applications in diverse topics from the analysis of geomorphic features and physical processes to logistics and supply chains. One domain of study that can be enhanced through geospatial modeling is public health and epidemology, in which associations between health outcomes and predictor variables can be viewed as inherently spatial processes. To understand the nuance of geospatial modeling as it relates to public health, we must first go over the distinction between global and local models.
+
+### Global Models
+
+Modeling approaches that don't explicitly account for spatial relationships, but rather weight every observation the same regardless of its spatial location are referred to here as *global*. On the other hand, *local* models also consider spatial relationships between observations as an important explanatory variable. A global model considers the relationships between all dependent and independent variables across the entire study extent, with the assumption that observed relationships hold true at all locations within the extent. The implications of these assumptions are that data from different locations within a model can be used with equal weighting, allowing for the estimation of a single parameter for each relationship being modeled. Geographers have pointed out for some time that the assumptions of global models have flaws, especially when examining complex relationships. In certain cases, spatial relationships act as lurking variables that drastically change the direction of $\beta$ coefficients - this is an example of [Simpson's paradox](https://cs.brown.edu/courses/cs100/lectures/readings/Kgel_Simpsonsparadoxversusecologicalfallacy-TheTFRFLPpuzzle.pdf) in spatial relationships. Sachdeva and Fotheringham (2023) explore this in detail [here](https://josis.org/index.php/josis/article/view/212/172).
+
+### Local Models
+
+In the context of spatial statistics, a local model considers the relationships between dependent and independent variables (or a sub-set of these variables) across a localized area of the study extent. We refer to these localized areas as 'neighborhoods'. Local models assume that observed relationships only hold within the neighborhood, and may vary across neighborhoods. This allows for local models to potentially model processes that vary over space with greater accuracy. This is valuable in the realm of public health, in which associations between environmental exposure, human behavior, and health outcomes are complex and often present as non-linear, spatially heterogeneous relationships. 
+
+#### Geographically Weighted Regression (GWR)
+
+[Geographically weighted regression](https://doi.org/10.1111/1467-9884.00145) (GWR) is a spatial regression technique that evaluates a local model of the variable or process you are trying to understand or predict by fitting a regression equation to every feature within a predetermined neighborhood in the dataset. While GWR is a local model, it does not assess the spatial scale at which processes may vary. In other words it assumes variance across an extent, but that all variances exist at the same spatial scale for every model term.
+
+#### Multiscale Geographically Weighted Regression (MGWR)
+
+[Multiscale geographically weighted regression](https://doi.org/10.1080/24694452.2017.1352480) (MGWR) builds upon the GWR technique by optimizing neighborhood sizes for each explanatory variable. This allows for the MGWR framework to examine both spatial variability and scalar effects simultaneously in local modeling. 
+
+#### Other Modeling Approaches
+
+[Spatial autoregressive models](https://s4.ad.brown.edu/resources/tutorial/modul2/geoda3final.pdf) (SAR) are one of the most common approaches for handling spatial autocorrelation in datasets. Generally, they utilize one of two techniques: 1) a *spatial error model* computes an error coefficient ($\lambda$) to test whether spatial error between terms is correlated, and 2) a *spatial lag model* introduces a spatial lag term $\rho$ to test if th dependent variable is affected by multiple independent observations at different locations. These methods are most commonly conducted in the open source GIS package, [GeoDa](https://geodacenter.github.io/). Various other local spatial models include Bayesian Spatially Varying Coefficients Models, Spatial Filtering methods, and Spatially Clustered Coefficient models. Additionally, other kinds of modeling approaches, such as machine learning based models, can be used to assess spatial relationships in data. This workshop will focus on the MGWR framework, given its computational efficiency, robust support in R, and widespread use. 
+
+#### Spatial Autocorrelation
+
+Spatial Autocorrelation is when data from locations near one another in space are more likely to be similar (i.e. are more correlated) than data from locations remote from one another. Spatial autocorrelation can be thought of as a double-edged sword. From a geographic perspective, we expect that raw data will show spatial autocorrelation, and use this to our advantage. For example, there is a notion in geography known as [Tobler's First Law of Geography](https://gisgeography.com/tobler-first-law-of-geography/), in which it is assumed that objects in space closer to each other are more likely to be related than objects that are farther apart. When examining processes that vary over space, we assume that data representing these processes will be non-randomly distributed (i.e. show spatial autocorrelation), and that in assessing these distributions through spatial statistics, we can infer otherwise hidden properties of the process. 
+
+In this workshop, we will measure the spatial autocorrelation of model residuals. If residuals are spatially autocorrelated then we can conclude that the given model is poorly specified by not attending to all spatial relationships between model terms. *Local models do not necessarily account for all spatial autocorrelation in model residuals.*
+
+# Example: Low Birthweight Rates
+
+In this workshop, you will examine how rates of low-weight births (LWB) in Colorado relate to environmental pollution and socioeconomic covariates. Our main objective is to demonstrate how spatial relationships may be lurking variables in regression models.
+
+Using this data, we will model the relationship between LWB and environmental pollution, corrected for social vulnerability variables using:
+
+1. An ordinary least squares (linear) model,
+2. A geographically weighted regression, and, optionally
+3. A multiscale geographically weighted regression.
+
+For each model we will examine model diagnostics, including:
+
+1. Overall model strength and predictive capability,
+2. Distribution (normality) of model residuals, and
+3. Spatial autocorrelation of model residuals.
+
+## Getting Started
+ 
+Like most scripting languages, base R offers an array of basic commands for data manipulation and analysis. However, if you want to do anything more technical or esoteric, you have to download and install specialized packages. 
+
+$\textbf{A note on R:}$ R is an extensive coding environment. It would be impossible to explain every command in this workshop. The intent of this workshop is to introduce you to performing spatial data-analysis in R, and give you to the background to learn and apply these techniques in your own research.
+  
+  The open source community has designed ["cheat sheets"](https://posit.co/resources/cheatsheets/) for different R topics. Please refer to the [Base R cheat sheet](https://rstudio.github.io/cheatsheets/base-r.pdf) for descriptions of common commands and operators. In R Studio, you can navigate to *Help>Cheatsheets* to access all of them. There is also a wealth of community information online. A quick Google search can point toward solutions for many problems. Below we have provided basic information on key ideas and commands for this workshop:
+
+  * *variable* - In R we define data-objects, such as a spreadsheet of SVI data per census tract, as a variable. Variables allow us to easily reference complex data objects in code functions.
+  
+  * *$ (extractor operator)* - The $ is the extractor operator. It is used to reference specific variables in a data table or object.
+  
+  * *<- (assignment operator)* - The <- is the assignment operator. This can be thought of as an '=' (equals). We use the assignment operator to define variables.
+  
+  * *%>% (pipe operator)* - The %>% is the pipe operator. This is a way to chain operations together (i.e. 'pipe' information). It takes the output from the left of the pipe and passes it to an expression on the right. For example, we can use the pipe to take the data-object represented by a variable, and input ('pipe') this into a function. Pipes are not a part of base R, which is why we call in the *dplyr* library.
+  
+  * *Data Frame* - Tables of data in R are referred to as 'data frames'. This is basically a data-object that acts like a spreadsheet, in which columns are variables/fields and rows are observations.
+
+### Install packages
+
+Both code chunks below load the necessary packages to complete the workshop. If you have installed all of the required packages, skip the first chunk and run the second one by clicking on the green arrow in the top right corner of the chunk. If you need to install any libraries, un-comment any or all of the lines below by removing the #. (*Hint: you can comment or un-comment lines by selecting them and pressing Ctrl+Shift+C.)
+
+```{r}
+## Installing libraries
+## If you don't have any of the required packages installed, un-comment and run the necessary lines
+# install.packages("GWmodel")
+# install.packages("reshape2")
+# install.packages("ggplot2")
+# install.packages("GGally")
+# install.packages("gridExtra")
+# install.packages("tmap")
+# install.packages("dplyr")
+# install.packages("sf")
+# install.packages("stringr")
+# install.packages("tidyverse")
+# install.packages("Hmisc")
+# install.packages('car')
+# install.packages('Rtools')
+# install.packages('nortest')
+# install.packages('spdep')
+```
+
+### Load Libraries into R Environment (STEP 0)
+
+Even if you've downloaded and installed the necessary libraries, they haven't been called directly into the current R environment. This step is required for running the functions throughout the workshop.
+
+```{r}
+# Import libraries
+library(GWmodel)
+library(reshape2)
+library(ggplot2)
+library(GGally)
+library(gridExtra)
+library(tmap)
+library(dplyr)
+library(sf)
+library(stringr)
+library(tidyverse)
+library(Hmisc)
+library(car)
+library(nortest)
+library(spdep)
+
+source("plotting_functions.R")
+
+```
+
+## Data
+
+This workshop uses the datasets below, all of which contain data aggregated to census tracts in Colorado:
+
+   $\textbf{Outcome:}$ 2018 rate of low weight births (LWB) provided in the Colorado Department of Public Health and Environment (CDPHE) [Open Data portal](https://data-cdphe.opendata.arcgis.com/datasets/cdphe-composite-selected-health-outcome-dataset-census-tract/explore).
+   
+   $\textbf{Main Exposure:}$ 10-year average (2008 - 2018) of total releases in pounds from [Toxic Release Inventory](https://www.epa.gov/toxics-release-inventory-tri-program/tri-basic-data-files-calendar-years-1987-present) (TRI) facilities within 50 kilometers of [population-weighted census tract centroids](https://www.census.gov/geographies/reference-files/time-series/geo/centers-population.2010.html#list-tab-1319302393) in Colorado.
+   
+   $\textbf{Covariates:}$ Estimated proportions of census tract-level social vulnerability from the [2018 ATSDR-CDC Social Vulnerability Index](https://www.atsdr.cdc.gov/placeandhealth/svi/documentation/pdf/SVI2018Documentation_01192022_1.pdf).
+
+Here is a summary of all variables we will use for this analysis:
+
+1. `LWB_ADJRATE` - 2018 Adjusted rate of low weight births (LWB) by census tract in Colorado
+2. `avgReleasesLb_10yr` - 10-year average (2008-2018) of total toxic releases in lbs. within 50-km of population-weighted census tract centroids
+3. `RPL_THEME1` - Percentile ranking by census tract of SVI socioeconomic status theme (described below)
+4. `RPL_THEME2` - SVI household characteristics theme
+5. `RPL_THEME3` - SVI minority status and language theme
+6. `RPL_THEME4` - SVI housing type and transportation theme
+
+Raw data is imported in the form of spreadsheets, in which observations have location identifiers. We then put this data into a GIS environment and spatialize it by joining the data to spatial objects. For this workshop we will use vector data. Vector data can simply be thought of as polygons (shapes) with location information. In other words, areas projected onto the surface of the Earth. For this workshop we will use vector data in *shapefile* format. In the case of this workshop, these shapes represent the census tracts of the state of Colorado. By joining the raw data to census tracts, we can use spatial statistics to analyze the spatial relationships within the data. 
+
+Shapefiles are a data format for storing geometry and attribute information of a spatial dataset. Notice that we only read in one file with a .shp extension, but that the file directory *./Tracts* contains 7 items with the same name but different extensions. All of these files are necessary for GIS software to read and display a .shp. 
+
+*tl_2010_08_tract10.shp* is a product of the U.S. Census Bureau called the [TIGER/Line Shapefiles](https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html) (TIGER stands for Topologically Integrated Geographic Encoding and Referencing system.) 
+
+### Import Shapefile (STEP 1)
+
+We will use the [sf](https://cran.r-project.org/web/packages/sf/index.html), or Simple Features, library to import the shapefile of census tracts and name it `dat_tracts`. We then draw a very basic map just to ensure that it is rendering correctly. Run the code chunk below by clicking on the green arrow in the top right of the chunk.
+
+```{r, message=FALSE}
+# Import shapefile
+dat_tracts <- st_read(dsn = "./Tracts/tl_2010_08_tract10.shp")
+
+# Plot shapefile with base R - this is just to check that it renders correctly
+par(mar=c(0,0,0,0))
+plot(dat_tracts, col="#333333", lwd=0.25, border=0, max.plot = 1)
+
+```
+
+
+### Import Exposure Data (STEP 2)
+
+Next, we will use base R to read in the CSV of exposure data and name it `dat_tri`. The first thing we need to do after importing the CSV data table is ensure that the census tract ID (GEOID) is the correct length. Some states have a GEOID that begins with 0, Colorado being one of them (08). The problem is that CSV files will often remove the leading 0 in numbers. Since all GEOIDs are standardized by the US Census to a length of 11 characters $^1$, here we make sure that every GEOID in the table is 11 characters long by padding them with a 0 on the left side.
+
+```{r}
+dat_tri <- read.csv('./Exposure/avgReleases_tract_popCenter_50km_CO_2008-2018.csv')
+# Pad GEOID to 11 characters
+dat_tri$GEOID10 <- str_pad(dat_tri$GEOID10, width = 11, side = "left", pad = 0)
+
+unique(nchar(dat_tri$GEOID10)) # Un-comment this line if you want to check if padding worked
+```
+All GEOIDs are `r unique(nchar(dat_tri$GEOID10))` characters long. *Note: if this says something other than 11 make sure the chunk above is running correctly.*
+
+### Import Confounders (STEP 3)
+
+This data table contains 2018 SVI data aggregated to census tracts. We first read in the data table and define it as a variable `svi`, and format to pad GEOIDs (called 'FIPS' in the SVI dataset)$^1$ as done in Step 2. Next, we pipe the `svi` variable into a filtering function 'filter()', to filter out data that is not located with Colorado census tracts, and define this filtered data as a new variable `svi_sub`. Next, we convert missing values (-999) to *NA*; this will make it easier to exclude missing values from statistical analysis later on. Lastly, we pipe the `svi_sub` variable into the *select()* function to select only fields that start with "RPL_THEME", and overwrite the `svi_sub` variable with this selection.
+
+There are four RPL_THEME variables in the 2018 SVI. These are the summary percentile rankings by census tract of variables included in four themes generally related to social vulnerability:
+
+1. $\textbf{Theme 1}$: Socioeconomic status
+    + Below poverty
+    + Unemployed
+    + Income
+    + No high school diploma
+2. $\textbf{Theme 2}$: Household characteristics
+    + Aged 65 or older
+    + Aged 17 or younger
+    + Civilian with a disability
+    + Single-parent households
+3. $\textbf{Theme 3}$: Minority status and language
+    + Minority
+    + Aged 5 or older who speaks English "less than well"
+4. $\textbf{Theme 4}$: Housing type and transportation
+    + Multi-unit structures
+    + Mobile homes
+    + Crowding
+    + No vehicle
+    + Group quarters
+
+$^1$ *You will often see FIPS and GEOID used interchangeably. This is technically incorrect. Per the [US Census Bureau](https://www.census.gov/library/reference/code-lists/ansi.html), Federal Information Processing Series (FIPS) codes are 5-digit county subdivisions. A GEOID is a concatenation of codes for state, county, and census tract, totaling 11 characters.*
+
+```{r}
+svi <- read.csv('./Confounders/SVI_2018_US.csv') # SVI data for all census tracts in US
+svi$FIPS <- str_pad(svi$FIPS, width = 11, side = "left", pad = 0) # Pad GEOIDs so that they are all 11 characters long
+unique(nchar(svi$FIPS))
+
+svi_sub <- svi %>%
+  filter(ST_ABBR %in% c("CO")) # Subset SVI to only include tracts in Colorado
+
+svi_sub[svi_sub == -999] <- NA # Missing values are coded as -999, here we replace -999 with NA
+
+# Keep percentage, percentile, theme ranking, flag variables, and total population
+svi_sub <- svi_sub %>%
+  dplyr::select(FIPS, starts_with(c("RPL_THEME")))
+
+unique(nchar(svi_sub$FIPS))
+```
+
+All GEOIDs in the SVI dataset are `r unique(nchar(svi_sub$FIPS))` characters long. 
+
+*Note: if this says something other than 11 make sure the chunk above is running correctly.*
+
+### Import Outcome (STEP 4)
+
+This data table contains health outcome data aggregated to census tracts. We first read in the data table and define it as a variable `outcome`. Next, we select the fields we need (GEOID and any variables related to LWB) and define this selection as a new variable `lwb`. Lastly, we again format to pad the GEOIDs as done in steps 2 and 3.
+
+```{r}
+outcome <- read.csv('./Outcome/CDPHE_Composite_Selected_Health_Outcome_Dataset_(Census_Tract).csv')
+lwb <- outcome[, c(2, 26:32)] # Subset to only include low birthweight variables and GEOID
+
+lwb$TRACT_FIPS <- str_pad(lwb$TRACT_FIPS, width = 11, side = "left", pad = 0) # Pad GEOIDs so that they are all 11 characters long
+
+unique(nchar(lwb$TRACT_FIPS))
+```
+
+All GEOIDs in the LWB dataset are `r unique(nchar(lwb$TRACT_FIPS))` characters long. 
+
+*Note: if this says something other than 11 make sure the chunk above is running correctly.*
+
+### Combine Data Tables (STEP 5)
+
+Join the formatted data tables of TRI releases (exposure), SVI confounders, and LWB (outcome) to the census tract shapefile, creating a combined spatial dataset. This combined dataset will then be ready to be fed into statistical models. However, since attribute joins can't be performed on a large SpatialPolygonsDataframe directly, we first convert `dat_tracts` into a normal data frame, allowing us to perform join operations. 
+
+We define the converted shapefile as new variable `dat_full`, then we pipe the census tracts into a series of join functions *right_join()*, joining the TRI, SVI, and LWB data tables to create a combined table. We overwrite `dat_full` with the new combined data table. Next, we create a subset of the dataset and define as a new variable `global_dat` for use in the global linear regression model. 
+
+*Optional: after you finish the workshop, come back to this step and follow instructions in the code comments to investigate how removing potential outliers affects results*. 
+
+Next, we convert `dat_full` back into spatial format for use in spatial statistical models. Lastly, we return a summary of `dat_full` to make sure data was joined properly (reference the finished HTML document to make sure your summary looks correct).
+
+```{r}
+# Combine data tables
+
+# Join data using the dplyr library - this doesn't work on SpatialPolygonDataFrame data types, so convert first
+dat_full <- st_as_sf(dat_tracts)
+
+dat_full <- dat_full %>%
+  right_join(dat_tri, by = c("GEOID10" = "GEOID10")) %>% # Exposure
+  right_join(lwb, by = c("GEOID10" = "TRACT_FIPS")) %>% # Outcome
+  right_join(svi_sub, by = c("GEOID10" = "FIPS")) # Confounders
+
+# Create a subset for global models
+global_dat <- dat_full %>%
+  # select(GEOID10, avgReleasesLb_10yr, LWB_ADJRATE, E_TOTPOP, starts_with("EP_")) # Keep total population estimate (E_TOTPOT) and land area (ALAND10) for later reference
+  select(GEOID10, avgReleasesLb_10yr, LWB_ADJRATE, starts_with("RPL_"))
+global_dat <- 
+  data.frame(global_dat[, 1:8]
+             ) 
+# %>% # To only keep certain observations, uncomment this line and move the pipe (%>%) up to the line above
+#   # Only retain observations we're analyzing
+#   slice(
+#     -659
+#   )
+
+dat_full <- as(na.omit(dat_full), "Spatial") # Convert dat_full back to spatial - we will use this for the spatial models
+
+summary(dat_full)
+```
+
+#### Correlation Matrix
+
+Before we pump the data into models, we'll start by exploring pairwise relationships between them to assess whether there are any nonlinear relationships. 
+
+The code chunk below creates a correlation matrix plot of the variables from our combined dataset. We first define a new variable `vars` as a list of the variable names. Next, we create a subset data table by selecting from `global_dat` the list of variables contained in `vars`. Lastly, we pass this data to a plotting function *ggpairs()* and define the output plot as variable `p_cor`, and print `p_cor` to display it below the code chunk.
+
+
+```{r, fig.height = 11, fig.width = 11}
+# # Optional: Log-transform exposure variable
+# global_dat <- global_dat %>%
+#   mutate(
+#     avgReleasesLb_10yr = log10(avgReleasesLb_10yr + 0.00001)
+#   )
+
+# Plot correlation matrix of variables from the global model
+vars <- c(
+  "avgReleasesLb_10yr", "RPL_THEME1", "RPL_THEME2", "RPL_THEME3", "RPL_THEME4"
+)
+
+# Create a subset of 'global_dat' with selected variables
+global_dat_sub <- global_dat[, c("LWB_ADJRATE", vars)]
+
+# Plot the correlation matrix using ggpairs
+p_cor <- ggpairs(
+  global_dat_sub,
+  upper = list(continuous = wrap("points", alpha = 0.2, size = 0.5)),
+  lower = list(continuous = "cor")
+)
+
+print(p_cor)
+```
+
+In the correlation matrix above, we don't see any strongly nonlinear relationships between explanatory variables, but we do see that the exposure variable, `avgReleasesLb_10yr` is *very* right-skewed, meaning that the majority of observations are at or close to 0. However, we won't perform any transformations to the variables to make interpretation and comparison of the three models more straightforward. 
+
+*If you want to try log-transforming the exposure variable, un-comment the top 5 lines in the chunk above and run the rest of the markdown file as normal. Be sure that you account for this in your interpretation.*
+
+## Global Model
+
+We'll start by fitting a global linear model to predict LWB rates by census tract using our environmental exposure variable, `avgReleasesLb\_10yr` and 16 variables from the SVI. 
+
+### Fit Full Linear Model (STEP 6)
+
+In this code chunk we run an ordinary least squares linear regression, with LWB rates as the dependent variable, TRI releases as the exposure, and SVI variables as confounders. We first pass `global_dat` through the linear model function, *lm()*, and define the output of the model as `lm_full`. Then we return a summary of `lm_full`. 
+
+```{r, message=FALSE}
+# Fit global model
+lm_full <- lm(LWB_ADJRATE ~ avgReleasesLb_10yr + RPL_THEME1 + RPL_THEME2 + RPL_THEME3 + RPL_THEME4
+              , data = global_dat)
+
+summary(lm_full)
+```
+
+### Global Model Interpretation (STEP 7)
+
+#### Model Diagnostics
+
+Next, we will conduct a few diagnostics of the global model. There are many more possible diagnostics that aren't presented here. For example, examining a) the leverage of individual observations and b) the individual contribution of variables with added-variable plots. 
+
+##### Normality of Residuals
+
+First, we plot the distribution of model residuals against a normal probabilistic distribution (a quantile-quantile, or QQ, plot) to see if the residuals demonstrate any unexpected patterns, and to identify any data points that exert increased influence on overall model fit. 
+
+In this chunk, we pass the residuals from `lm_full` into the *car* library function, *qqPlot*.
+
+```{R, fig.height = 6, fig.width = 6}
+# QQ Plot 
+qq_lm_full <- qqPlot(residuals(lm_full), main = "QQ Plot", xlab = "Normal Quantiles", ylab = "Residuals")
+print(qq_lm_full)
+
+```
+
+The QQ plot does suggest that the model is somewhat poorly specified because a large proportion of residuals vs. normal values fall outside the standard error range at both the lower and upper bounds, suggesting some [heteroskedasticity](https://statisticsbyjim.com/regression/heteroscedasticity-regression/) or [kurtosis](https://statisticsbyjim.com/basics/kurtosis/) of model residuals. 
+
+If we were to proceed only with a linear model, we might consider taking measures including transforming data or excluding individual observations to account for this nonlinear structure.
+ 
+##### Spatial Autocorrelation of Residuals
+
+Run the code chunk below to test for spatial autocorrelation in the residuals of our linear model. 
+
+We do this by first selecting the residuals from the model output and defining the residuals as new variable `lm_resid_col`. Next, using row names as a key, we join the column of residuals to `dat_full`. 
+
+The function below performs a *Anselin Local Moran's* $I$, which differs from the global *Moran's* $I$ test for spatial autocorrelation by computing the $I$ statistic for every location, $i$, as well as the local variance and $z$ value, as opposed to a single $I$ for the whole datset. Like the global approach, the local test tells us the degree of similarity between every observation and its neighbors, however it allows us to identify more localized clusters of (dis)similarity.
+
+Once the data are joined we prepare for the test by constructing a list of neighbors for every observation, `nb`. Next we compute spatial weights `lw` for every neighbor to pass into the *Moran's* $I$ test by summing all residuals in each neighborhood divided by the number of observations per neighborhood. Then we pass these parameters, along with `dat_full$residuals`, to the `moran.mc` function to test for spatial autocorrelation over 999 permutations. Each permutation randomly rearranges the neighborhood values around each observation to account for the inevitable random clustering of values.
+
+```{r}
+# Spatial autocorrelation of global linear model residuals
+lm_resid_col <- lm_full$residuals # Make data table of residuals from lm_red_AIC
+dat_full$residuals <- lm_resid_col[as.character(rownames(dat_full@data))] # Append residuals to dat_full by row name
+
+nb <- poly2nb(dat_full, queen = TRUE) # Define neighbors for each polygon
+lw <- nb2listw(nb, style = "U", zero.policy = TRUE) # Assign weights to neighbors
+moran_lm <- moran.mc(dat_full$residuals
+                    , lw
+                    , nsim = 999
+                    , alternative = "two.sided")
+print(rbind("Moran's I statistic: " ,moran_lm$statistic))
+print(rbind("P-value of Moran's I statistic: ", moran_lm$p.value)) 
+
+```
+The Moran's $I$ statistic of the linear model is `r moran_lm$statistic %>% signif(3)` and the p-value is `r moran_lm$p.value %>% signif(3)`. Because the $p-value$ is $<0.05$, we can conclude at a 95% CI that the residuals are significantly spatially autocorrelated, meaning that there are significant spatial relationships in the data that are not reconciled by the current global model.
+
+## Local Models
+### Calculate Distance Matrix (STEP 8)
+
+A key element of geographically weighted regressions is the spatial distance between observations. This is often measured as a straight line (Euclidean distance), but there are other approaches. For example, geodesic distance considers the curvature of the earth, which is appropriate when observations are very far apart
+
+Run the below code chunk to calculate a distance matrix, `DM`, between all observations in `dat_full`. A distance matrix is a matrix in which elements correspond to estimates of a pairwise distance between the sequences in a set. This can be simply though of as a measure of the distances between the locations of all of our observations in our data table. 
+
+```{r}
+# Calculate distance matrix
+DM <- gw.dist(dp.locat = coordinates(dat_full))
+```
+
+
+### Compute Bandwidths (STEP 9)
+
+Bandwidth, or neighborhood size, is the most influential parameter in GWR because it can significantly change parameter estimates. Simply put, larger bandwidths have smaller parameter weights thus increasing variation, and shorter bandwidths have larger weights to reduce local variation of parameters. Here, we use an automated cross-validation (CV) approach to optimize weights for each model term.
+
+```{r}
+# Define optimal bandwidths for GWR
+bw <- bw.gwr(LWB_ADJRATE ~ avgReleasesLb_10yr 
+                         + RPL_THEME1
+                         + RPL_THEME2
+                         + RPL_THEME3
+                         + RPL_THEME4
+           , data = dat_full
+           , approach = "CV"
+           , kernel = "gaussian"
+           , adaptive = TRUE
+           , longlat = TRUE
+           , dMat = DM)
+           
+```
+
+### Run GWR (STEP 10)
+
+Run to code chunk below to perform a basic GWR. We do this by passing our distance matrix `DM` and bandwidth `bw` variables, along with `dat_full`, to a GWR function *gwr.basic()* and defining its output as a new variable `gwr_results_dat`. We then print a summary of model results.
+
+```{r}
+# Basic GWR
+gwr_results_dat <- gwr.basic(LWB_ADJRATE ~ avgReleasesLb_10yr 
+                                         + RPL_THEME1
+                                         + RPL_THEME2
+                                         + RPL_THEME3
+                                         + RPL_THEME4
+                           , data = dat_full
+                           , bw = bw
+                           , dMat = DM
+                           , kernel = "gaussian"
+                           , adaptive = TRUE
+                           , longlat = TRUE)
+gwr_results_dat
+
+```
+
+### GWR Model Interpretation (STEP 11)
+#### Model Diagnostics
+
+Run the chunk below to view basic model diagnostics of `gwr_results_dat`.
+
+```{r}
+# Model diagnostics
+gwr_results_dat$GW.diagnostic
+```
+##### Normality of Residuals
+
+```{r}
+qq_gwr_results_dat <- qqPlot(gwr_results_dat$SDF$residual, main = "QQ Plot", xlab = "Normal Quantiles", ylab = "Residuals")
+print(qq_gwr_results_dat)
+```
+Again, we see that the residuals aren't normally distributed in the GWR model. There are still some lurking relationships.
+
+#####  Spatial Autocorrelation of Residuals
+
+Just like we did for the linear model, we'll test the spatial autocorrelation of model residuals. First, we define the neighborhood kernel function `nb` and weighting scheme `lw`.
+
+```{r}
+# Spatial autocorrelation of basic GWR residuals
+nb <- poly2nb(gwr_results_dat$SDF, queen = TRUE) # Define neighbors for each polygon
+lw <- nb2listw(nb, style = "U", zero.policy = TRUE) # Assign weights to neighbors
+moran_gwr <- moran.mc(gwr_results_dat$SDF$residual
+                    , lw
+                    , nsim = 999
+                    , alternative = "two.sided")
+print(rbind("Moran's I statistic: " ,moran_gwr$statistic))
+print(rbind("P-value of Moran's I statistic: ", moran_gwr$p.value)) 
+
+```
+The Moran's $I$ statistic of the GWR model is `r moran_gwr$statistic %>% signif(3)` and the p-value is `r moran_gwr$p.value %>% signif(3)`. Because the $p-value$ is $<0.05$, we can conclude at a 95% CI that the residuals are significantly spatially autocorrelated, meaning that there are significant spatial relationships in the data that are not reconciled by the current local model.
+
+#### Plot Distribution of Beta Coefficients
+
+Similar to global linear models, GWR returns $\beta$ coefficients for each explanatory variable. However, there are beta coefficients for each explanatory variable at each observation as defined by the model fit in the local neighborhood. A helpful way to interpret this is to look at the overall distribution of each $\beta$. 
+
+We first reshape the coefficient data table using the *melt()* function to reshape the data from wide to long format and define a new variable `melt_coefficients`. We then use *GGplot2* to draw boxplots of the distributions with *geom_boxplot()* and draw a red dashed line at y=0 with *geom_hline* to help with our interpretation. The plot is named `p_gwr_bp`.
+
+```{r, fig.width = 10, fig.height = 4}
+# Boxplots of coefficients
+# coefficients <- data.frame(mgwr_results_dat_full$SDF[, 2:11])
+coefficients <- data.frame(gwr_results_dat$SDF[, 2:6])
+melt_coefficients <- reshape2::melt(coefficients)
+
+p_gwr_bp <- ggplot(melt_coefficients, aes(x = fct_reorder(variable, value, .fun = mean), y = value))
+p_gwr_bp <- p_gwr_bp + geom_boxplot()
+p_gwr_bp <- p_gwr_bp + labs(x = "", y = "Coefficient") + ggtitle("Boxplots of GWR Coefficients")
+p_gwr_bp <- p_gwr_bp + theme(axis.text.x = element_text(angle = 40, hjust = 1))
+p_gwr_bp <- p_gwr_bp + geom_hline(yintercept = 0, linetype = "dashed", color = "red")
+
+print(p_gwr_bp)
+
+```
+
+Generally, group means >0 suggest a positive relationship between the explanatory variable and outcome and vice versa. Sometimes $\beta$ coefficients are both positive and negative – this can make interpretation difficult, requiring deeper interrogation of how local relationships play out. In the plots above, we see that `avgReleasesLb_10yr`, `RPL_THEME2`, `RPL_THEM3` and `RPL_TMEME4` Next, we will map these coefficients to see where this is occurring.
+
+#### Mapping GWR Beta Coefficients
+
+Run the code chunk below to generate maps. The code will generate a map of the census tracts of Colorado colored by the $\beta$ coefficients of each explanatory variable in `gwr_results_dat`. We further shade each census tract where the observation is insignificant at a 95% CI based on the local $T$ value.
+
+We do this by creating a series of sub-plots, using a custom plotting function *plot.gwr.coefs*. We pass MGWR results for each variable to this function, generating a sub-plot that we define as its own variable `p1_gwr` - `p6_gwr`. Next, we pass these sub-plot variables to a plot arrangement function *tmap_arrange* that will organize the sub-plots into a neat, combined plot. We define this combined plot as `p_gwr`. *Note: depending on your computer, the maps may take a while to generate.*
+
+```{r, fig.width = 8.5, fig.height = 10.5}
+# Map coefficients
+p1_gwr <- plot.gwr.coefs(gwr_results_dat$SDF, "Intercept", gwr_results_dat$SDF$Intercept_TV)
+p2_gwr <- plot.gwr.coefs(gwr_results_dat$SDF, "avgReleasesLb_10yr", gwr_results_dat$SDF$avgReleasesLb_10yr_TV)
+p3_gwr <- plot.gwr.coefs(gwr_results_dat$SDF, "RPL_THEME1", gwr_results_dat$SDF$RPL_THEME1_TV)
+p4_gwr <- plot.gwr.coefs(gwr_results_dat$SDF, "RPL_THEME2", gwr_results_dat$SDF$RPL_THEME2_TV)
+p5_gwr <- plot.gwr.coefs(gwr_results_dat$SDF, "RPL_THEME3", gwr_results_dat$SDF$RPL_THEME3_TV)
+p6_gwr <- plot.gwr.coefs(gwr_results_dat$SDF, "RPL_THEME4", gwr_results_dat$SDF$RPL_THEME4_TV)
+
+
+p_gwr <- tmap_arrange(p1_gwr
+                    , p2_gwr
+                    , p3_gwr
+                    , p4_gwr
+                    , p5_gwr
+                    , p6_gwr
+                    , ncol = 2)
+print(p_gwr)
+```
+In the maps above, we see that `avgReleasesLb_10yr` is significant (95% CI) and positive (though only slightly) across most of the state, but that it is consistently insignificant throughout the central portion of Colorado where most of the population is concentrated and where census tracts tend to be considerably smaller. What other explanatory variables might help improve these results?
+
+#### Map Local R2
+
+Another important output from GWR models is the local $R^2$ -- the $R^2$ value at every observation. 
+
+```{r, fig.width=8, fig.height=5}
+# Plot local R2
+p_gwr <- tm_shape(gwr_results_dat$SDF) +
+  tm_polygons("Local_R2", palette = "RdYlBu", title = "Local R2") +
+  tm_layout(legend.position = c("right", "bottom"), 
+            legend.outside = TRUE 
+            )
+
+print(p_gwr)
+```
+In the map above, we see that the predictive power of the GWR model is spatially heterogeneous, with the strongest predictive power in census tracts throughout the south-central portion of Colorado. Further, we see that the model is  poorly specified in most census tracts along the eastern portion of the state. Beyond including spatial relationships as model dependencies, GWR can also help us identify specific locations or regions where our models fail to predict outcomes, possibly narrowing our search for other potential covariates.
+
+# Conclusion
+
+Congratulations! You have made it to the last step of the workshop. So far, you have:
+
+1. Formatted data
+2. Ran global and local statistical tests
+3. Analyzed model diagnostics, and 
+4. Plotted simple maps of local model results. 
+
+The main takeaway from this workshop is that there are sophisticated techniques for exploring the inherently spatial nature of environmental exposures and health outcomes. With some minimal data formatting, you should be able to modify the code contained here to explore these types of relationships in your own research.
+
+When you run the last code chunk below you will see that the overall predictive power of the local regression (GWR) is better than the global linear model -- this is apparent when comparing the $R^2$ and adjusted $R^2$ values. Also, the GWR model strength is better, as is shown by lower $AIC$ and $BIC$ values. However, we haven't accounted for spatial autocorrelation, as you can see in the row for *Moran's* $I$ and the associated $p$-value. 
+
+This is a crucial takeaway: spatial regression models don't automatically resolve lurking spatial relationships, but they do account for some portion of them. Aside from identifying more variables to explain the spatial nature of exposure-outcome models, recall that there are other approaches like spatial autoregressive (SAR) models, which introduce spatial lag or spatial error terms to the regression. It's worth noting that SAR models are inherently global because they cannot spatially locate outliers.
+
+```{r}
+# Data frame for summary table
+table_data <- data.frame(
+  Metric = c("R2", "Adj. R2", "AIC", "BIC", "Moran's I (p-value)"),
+  LM = c(summary(lm_full)$r.squared %>% signif(3)
+       , summary(lm_full)$adj.r.squared %>% signif(3)
+       , AIC(lm_full) %>% signif(7)
+       , BIC(lm_full) %>% signif(7)
+       , paste0(moran_lm$statistic %>% signif(3), " (", moran_lm$p.value %>% signif(3), ")")),
+  GWR = c(gwr_results_dat$GW.diagnostic$gw.R2 %>% signif(3)
+       , gwr_results_dat$GW.diagnostic$gwR2.adj %>% signif(3)
+       , gwr_results_dat$GW.diagnostic$AIC %>% signif(7)
+       , gwr_results_dat$GW.diagnostic$BIC %>% signif(7)
+       , paste0(moran_gwr$statistic %>% signif(3), " (", moran_gwr$p.value %>% signif(3), ")"))
+)
+
+# Print the table
+knitr::kable(table_data, format = "markdown")
+
+```
+
+If you have time, consider running the remaining code to conduct a multiscale GWR. As long as everything before this point has been run, the MGWR will work with all of the data and objects in the current R environment.
+
+## Optional Step: MGWR
+### Run MGWR (OPTIONAL STEP 1)
+
+Run the below code chunk to perform a multiscale geographically weighted regression (MGWR). The model is set up the same was as the GWR, using the *gwr.multiscale()* function. The major difference here is that we do not pre-define a distance matrix and bandwidth. The MGWR does this automatically, optimizing distance and bandwidth based on scalar relationships in the data. To do this, MGWR runs though many iterations, eventually discovering an optimized model based on a criterion. This is very computationally intensive and can take several hours to run depending on the data and number of iterations you specify. For the purposes of this workshop, we will only do 1 iteration. Running more iterations allows the model to converge on a pre-specified criterion - here we use the changing values of the residual sum of squares (CVR) backfitting procedure to reach convergence.
+
+*To see what an optimized model looks like, refer to the HTML document in which the model was run with a maximum of 100 iterations.* If you happen to have a powerful laptop, try running this step again after you complete the workshop with more iterations to see how the model improves. *This will take a at least a couple of hours with the current dataset.*
+
+*Note: even when using 1 iteration, the model can take several minutes to run. Start the code chunk below and sit back. If it takes to long, do not fret! Feel free to follow along with us for the final steps and reference to pdf* 
+
+```{r, message=FALSE}
+# Multiscale geographically weighted regression
+# Documentation: https://search.r-project.org/CRAN/refmans/GWmodel/html/gwr.multiscale.html
+mgwr_results_dat_full <- gwr.multiscale(LWB_ADJRATE ~ avgReleasesLb_10yr 
+                                               + RPL_THEME1
+                                               + RPL_THEME2
+                                               + RPL_THEME3
+                                               + RPL_THEME4
+                                      , data = dat_full
+                                      , max.iterations = 1 # Set max iterations higher to optimize model - it's at 2 now to minimize computational burden
+                                      , kernel = "gaussian" # wgt = exp(-.5*(vdist/bw)^2);
+                                      # , kernel = "exponential" # wgt = exp(-vdist/bw);
+                                      # , kernel = "bisquare" # wgt = (1-(vdist/bw)^2)^2 if vdist < bw, wgt=0 otherwise;
+                                      # , kernel = "tricube" # wgt = (1-(vdist/bw)^3)^3 if vdist < bw, wgt=0 otherwise;
+                                      # , kernel = "boxcar" # wgt=1 if dist < bw, wgt=0 otherwise
+                                      , adaptive = TRUE
+                                      , criterion = "CVR"
+)
+
+
+# Model outputs
+print(mgwr_results_dat_full)
+```
+
+### MGWR Model Interpretation (OPTIONAL STEP 2)
+#### Model Diagnostics
+```{r}
+# Model diagnostics
+print(mgwr_results_dat_full$GW.diagnostic)
+```
+
+##### Normality of Residuals
+
+```{r}
+qq_gwr_results_dat <- qqPlot(mgwr_results_dat_full$SDF$residual, main = "QQ Plot", xlab = "Normal Quantiles", ylab = "Residuals")
+print(qq_gwr_results_dat)
+```
+
+What do you see in the model residuals? What does it mean if they're not normally distributed?
+
+##### Spatial Autocorrelation
+```{r}
+# Spatial autocorrelation of MGWR residuals
+nb <- poly2nb(mgwr_results_dat_full$SDF, queen = TRUE) # Define neighbors for each polygon
+lw <- nb2listw(nb, style = "U", zero.policy = TRUE) # Assign weights to neighbors
+moran_mgwr <- moran.mc(mgwr_results_dat_full$SDF$residual
+                       , lw
+                       , nsim = 999
+                       , alternative = "two.sided")
+print(rbind("Moran's I statistic: " ,moran_mgwr$statistic))
+print(rbind("P-value of Moran's I statistic: ", moran_mgwr$p.value)) 
+
+```
+
+The Moran's $I$ statistic of the multiscale GWR model is `r moran_mgwr$statistic %>% signif(3)` and the p-value is `r moran_mgwr$p.value %>% signif(3)`. Because the $p-value$ is $>0.05$, we can conclude at a 95% CI that the residuals are not significantly spatially autocorrelated, meaning that the model is correctly specified in terms of lurking spatial relationships.
+
+#### Plot Distribution of Beta Coefficients
+
+Exactly as with GWR models, MGWR returns $\beta$ coefficients for each explanatory variable. Run the code chunk below to plot boxplots of MGWR coefficients, `p_mgwr_bp`.
+
+```{r, fig.width = 10, fig.height = 4}
+# Boxplots of coefficients
+# coefficients <- data.frame(mgwr_results_dat_full$SDF[, 2:11])
+coefficients <- data.frame(mgwr_results_dat_full$SDF[, 2:6])
+melt_coefficients <- reshape2::melt(coefficients)
+
+p_mgwr_bp <- ggplot(melt_coefficients, aes(x = fct_reorder(variable, value, .fun = mean), y = value))
+p_mgwr_bp <- p_mgwr_bp + geom_boxplot()
+p_mgwr_bp <- p_mgwr_bp + labs(x = "", y = "Coefficient") + ggtitle("Boxplots of MGWR Coefficients")
+p_mgwr_bp <- p_mgwr_bp + theme(axis.text.x = element_text(angle = 40, hjust = 1))
+p_mgwr_bp <- p_mgwr_bp + geom_hline(yintercept = 0, linetype = "dashed", color = "red")
+
+print(p_mgwr_bp)
+
+```
+
+In the plots above, we see that `RPL_THEME1` and `RPL_TMEME3` (to an extent) are both positive and negative. Again, we will map these coefficients to see where this is occurring. 
+
+$\textbf{A note on MGWR iterations:}$ In the HTML document you will see that we ran the MGWR with a maximum of 100 iterations in hopes that the model will converge using the CVR backfitting criterion. Even though it doesn't converge with this adjustment, we do see different results for multiple model diagnostics, holding everything else constant. Most notably, $\beta$ coefficients for `RPL_THEME1` are now solidly positive. While you can make meaningful inference about model strength with one or a few iterations, it's good practice to let the model approach convergence.
+
+## Mapping Results (OPTIONAL STEP 3)
+
+Run the code chunk below to generate maps of MGWR $\beta$ coefficients. *Note: depending on your computer, the maps may take a while to generate.*
+
+```{r, fig.width = 8.5, fig.height = 10.5}
+# Map coefficients
+p1_mgwr <- plot.gwr.coefs(mgwr_results_dat_full$SDF, "Intercept", mgwr_results_dat_full$SDF$Intercept_TV)
+p2_mgwr <- plot.gwr.coefs(mgwr_results_dat_full$SDF, "avgReleasesLb_10yr", mgwr_results_dat_full$SDF$avgReleasesLb_10yr_TV)
+p3_mgwr <- plot.gwr.coefs(mgwr_results_dat_full$SDF, "RPL_THEME1", mgwr_results_dat_full$SDF$RPL_THEME1_TV)
+p4_mgwr <- plot.gwr.coefs(mgwr_results_dat_full$SDF, "RPL_THEME2", mgwr_results_dat_full$SDF$RPL_THEME2_TV)
+p5_mgwr <- plot.gwr.coefs(mgwr_results_dat_full$SDF, "RPL_THEME3", mgwr_results_dat_full$SDF$RPL_THEME3_TV)
+p6_mgwr <- plot.gwr.coefs(mgwr_results_dat_full$SDF, "RPL_THEME4", mgwr_results_dat_full$SDF$RPL_THEME4_TV)
+
+
+p_mgwr <- tmap_arrange(p1_mgwr
+                     , p2_mgwr
+                     , p3_mgwr
+                     , p4_mgwr
+                     , p5_mgwr
+                     , p6_mgwr
+                     , ncol = 2)
+print(p_mgwr)
+```
+In the map above, we see that the main exposure variable, `avgReleasesLb_10yr` is only significant in about half of the census tracts, and that the linear relationship between it and `LWB_ADJRATE` is generally quite small, albeit positive. This suggests that while the model is generally well-specified, future work ought to explore more influential exposure variables on LWB.
+
+Finally, let's compare selected diagnostics across all three models:
+
+```{r}
+# Data frame for summary table
+table_data <- data.frame(
+  Metric = c("R2", "Adj. R2", "AIC", "BIC", "Moran's I (p-value)"),
+  LM = c(summary(lm_full)$r.squared %>% signif(3)
+       , summary(lm_full)$adj.r.squared %>% signif(3)
+       , AIC(lm_full) %>% signif(7)
+       , BIC(lm_full) %>% signif(7)
+       , paste0(moran_lm$statistic %>% signif(3), " (", moran_lm$p.value %>% signif(3), ")")),
+  GWR = c(gwr_results_dat$GW.diagnostic$gw.R2 %>% signif(3)
+       , gwr_results_dat$GW.diagnostic$gwR2.adj %>% signif(3)
+       , gwr_results_dat$GW.diagnostic$AIC %>% signif(7)
+       , gwr_results_dat$GW.diagnostic$BIC %>% signif(7)
+       , paste0(moran_gwr$statistic %>% signif(3), " (", moran_gwr$p.value %>% signif(3), ")")),
+  MGWR = c(mgwr_results_dat_full$GW.diagnostic$R2.val %>% signif(3)
+       , mgwr_results_dat_full$GW.diagnostic$R2adj %>% signif(3)
+       , mgwr_results_dat_full$GW.diagnostic$AIC %>% signif(7)
+       , mgwr_results_dat_full$GW.diagnostic$BIC %>% signif(7)
+       , paste0(moran_mgwr$statistic %>% signif(3), " (", moran_mgwr$p.value %>% signif(3), ")"))
+)
+
+# Print the table
+knitr::kable(table_data, format = "markdown")
+
+```
+
+*This workshop is supported by New Mexico Integrative Science Program Incorporating Research in Environmental Sciences (NM-INSPIRES) Center at the University of New Mexico (1P30ES032755). Additional support comes from the University of New Mexico METALS Superfund Research Program (1P42ES025589), the the UNM Center for Native Environmental Health Equity Research -- A Center of Excellence In Environmental Health Disparities Research (P50MD015706), and the UNM Department of Communication and Journalism. The material presented here has not been formally reviewed by the funding agencies. The views expressed herein are solely those of the authors and do not necessarily reflect those of the agencies.*
+
+# Selected References
+Brunsdon, C., S. Fotheringham, and M. Charlton. 1998. Geographically Weighted Regression. *Journal of the Royal Statistical   Society: Series D (The Statistician)* 47 (3):431–443.
+
+Bureau, U. C. 2021. Centers of Population. *Census.gov.* https://www.census.gov/geographies/reference-files/time-series/geo/centers-population.html (last accessed 7 February 2024).
+
+———. 2023. American National Standards Institute (ANSI), Federal Information Processing Series (FIPS), and Other Standardized Geographic Codes. *Census.gov.* https://www.census.gov/library/reference/code-lists/ansi.html (last accessed 7 February 2024).
+
+———. 2024. TIGER/Line Shapefiles. Census.gov. https://www.census.gov/geographies/mapping-files/time-series/geo/tiger-line-file.html (last accessed 7 February 2024).
+
+CDPHE Composite Selected Health Outcome Dataset (Census Tract). 2022. https://data-cdphe.opendata.arcgis.com/datasets/cdphe-composite-selected-health-outcome-dataset-census-tract/explore (last accessed 7 February 2024).
+
+Fotheringham, A. S., W. Yang, and W. Kang. 2017. Multiscale Geographically Weighted Regression (MGWR). *Annals of the American Association of Geographers* 107 (6):1247–1265.
+
+GISGeography. 2017. What is Tobler’s First Law of Geography? *GIS Geography.* https://gisgeography.com/tobler-first-law-of-geography/ (last accessed 7 February 2024).
+
+Kögel, T. 2017. Simpson’s paradox and the ecological fallacy are not essentially the same: The example of the fertility and female employment puzzle. https://www.researchgate.net/publication/301300241.
+
+Sachdeva, M., and A. S. Fotheringham. 2023. A Geographical Perspective on Simpson’s Paradox. *Journal of Spatial Information Science* (26):1–25.
+
+US EPA. 2023. TRI Basic Data Files: Calendar Years 1987-Present. https://www.epa.gov/toxics-release-inventory-tri-program/tri-basic-data-files-calendar-years-1987-present (last accessed 7 February 2024).
+
